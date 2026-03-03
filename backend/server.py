@@ -139,15 +139,12 @@ async def geocode_place(place_name: str) -> List[PlaceSearchResult]:
         # Return empty list instead of raising exception for better UX
         return []
 
-# Astrology Calculation using jyotishyamitra
+# Astrology Calculation using Kerykeion (Vedic/Sidereal)
 def calculate_chart(birth_details: BirthDetailsInput, lat: float, lon: float, tz: str) -> Dict[str, Any]:
-    """Calculate Vedic astrology chart using jyotishyamitra"""
-    import jyotishyamitra as jsm
+    """Calculate Vedic astrology chart using Kerykeion with Lahiri ayanamsha"""
+    from kerykeion import AstrologicalSubject
     
     try:
-        # Clear any previous data
-        jsm.clear_birthdata()
-        
         # Parse date and time
         dob_parts = birth_details.date_of_birth.split("-")
         year = int(dob_parts[0])
@@ -156,46 +153,245 @@ def calculate_chart(birth_details: BirthDetailsInput, lat: float, lon: float, tz
         
         time_parts = birth_details.time_of_birth.split(":")
         hour = int(time_parts[0])
-        minute = int(time_parts[1])
-        second = int(time_parts[2]) if len(time_parts) > 2 else 0
+        minutes = int(time_parts[1])
         
-        # Input birth data
-        jsm.input_birthdata(name=birth_details.name)
-        jsm.input_birthdata(gender=birth_details.gender or "unknown")
-        jsm.input_birthdata(year=year, month=month, day=day)
-        jsm.input_birthdata(hour=hour, minute=minute, second=second)
-        jsm.input_birthdata(latitude=lat, longitude=lon)
-        jsm.input_birthdata(timezone=tz)
+        # Create Vedic chart with Lahiri ayanamsha
+        subject = AstrologicalSubject(
+            birth_details.name,
+            year, month, day,
+            hour, minutes,
+            lng=lon,
+            lat=lat,
+            tz_str=tz,
+            online=False,
+            zodiac_type="Sidereal",
+            sidereal_mode="LAHIRI"
+        )
         
-        # Get birthdata
-        birthdata = jsm.get_birthdata()
+        # Build chart data structure
+        chart_data = {
+            "Birthdata": {
+                "Name": birth_details.name,
+                "Gender": birth_details.gender or "unknown",
+                "Year": year,
+                "Month": month,
+                "Day": day,
+                "Hour": hour,
+                "Minute": minutes,
+                "Place": birth_details.place_of_birth,
+                "Latitude": lat,
+                "Longitude": lon,
+                "Timezone": tz
+            },
+            "D1": {
+                "Planets": {},
+                "Houses": {}
+            },
+            "Dasha": {}
+        }
         
-        # Create temp output file
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = tmpdir
-            output_filename = "astro_output"
-            
-            status = jsm.set_output(path=output_path, filename=output_filename)
-            if status != "SUCCESS":
-                logger.error(f"Failed to set output path: {status}")
-                raise Exception(f"Output path error: {status}")
-            
-            # Generate astrological data
-            jsm.generate_astrologicalData(birthdata)
-            
-            # Read the output JSON
-            output_file = os.path.join(output_path, f"{output_filename}.json")
-            if os.path.exists(output_file):
-                with open(output_file, 'r') as f:
-                    chart_data = json.load(f)
-                return chart_data
-            else:
-                logger.error("Output file not generated")
-                raise Exception("Failed to generate chart data")
+        # Map house attribute names
+        house_attrs = [
+            'first_house', 'second_house', 'third_house', 'fourth_house',
+            'fifth_house', 'sixth_house', 'seventh_house', 'eighth_house',
+            'ninth_house', 'tenth_house', 'eleventh_house', 'twelfth_house'
+        ]
+        
+        # Get Ascendant
+        asc = subject.first_house
+        chart_data["D1"]["Planets"]["Ascendant"] = {
+            "Sign": asc.sign if hasattr(asc, 'sign') else str(asc.get('sign', '')),
+            "Degree": round(asc.position if hasattr(asc, 'position') else asc.get('position', 0), 2),
+            "House": 1,
+            "Nakshatra": get_nakshatra(asc.position if hasattr(asc, 'position') else asc.get('position', 0)),
+            "Pada": get_pada(asc.position if hasattr(asc, 'position') else asc.get('position', 0))
+        }
+        
+        # Planet mapping
+        planet_map = {
+            'sun': 'Sun',
+            'moon': 'Moon', 
+            'mercury': 'Mercury',
+            'venus': 'Venus',
+            'mars': 'Mars',
+            'jupiter': 'Jupiter',
+            'saturn': 'Saturn'
+        }
+        
+        # Get planetary positions
+        for attr, name in planet_map.items():
+            planet = getattr(subject, attr, None)
+            if planet:
+                sign = planet.sign if hasattr(planet, 'sign') else planet.get('sign', '')
+                pos = planet.position if hasattr(planet, 'position') else planet.get('position', 0)
+                house_name = planet.house if hasattr(planet, 'house') else planet.get('house', '')
+                retro = planet.retrograde if hasattr(planet, 'retrograde') else planet.get('retrograde', False)
+                
+                # Convert house name to number
+                house_num = 1
+                for i, h_attr in enumerate(house_attrs):
+                    if h_attr.replace('_', ' ').title().replace(' ', '_') in str(house_name):
+                        house_num = i + 1
+                        break
+                
+                chart_data["D1"]["Planets"][name] = {
+                    "Sign": sign,
+                    "Degree": round(pos, 2),
+                    "House": house_num,
+                    "Nakshatra": get_nakshatra(pos),
+                    "Pada": get_pada(pos),
+                    "Retrograde": retro
+                }
+        
+        # Get Rahu (North Node) and Ketu (South Node)
+        try:
+            rahu = subject.true_north_lunar_node if hasattr(subject, 'true_north_lunar_node') else subject.true_node
+            if rahu:
+                sign = rahu.sign if hasattr(rahu, 'sign') else rahu.get('sign', '')
+                pos = rahu.position if hasattr(rahu, 'position') else rahu.get('position', 0)
+                chart_data["D1"]["Planets"]["Rahu"] = {
+                    "Sign": sign,
+                    "Degree": round(pos, 2),
+                    "House": get_house_from_position(pos, subject),
+                    "Nakshatra": get_nakshatra(pos),
+                    "Pada": get_pada(pos),
+                    "Retrograde": True
+                }
+                
+                # Ketu is opposite to Rahu
+                ketu_pos = (pos + 180) % 360
+                ketu_sign_idx = int(ketu_pos / 30)
+                ketu_signs = ["Ari", "Tau", "Gem", "Can", "Leo", "Vir", "Lib", "Sco", "Sag", "Cap", "Aqu", "Pis"]
+                chart_data["D1"]["Planets"]["Ketu"] = {
+                    "Sign": ketu_signs[ketu_sign_idx],
+                    "Degree": round(ketu_pos % 30, 2),
+                    "House": get_house_from_position(ketu_pos, subject),
+                    "Nakshatra": get_nakshatra(ketu_pos % 30),
+                    "Pada": get_pada(ketu_pos % 30),
+                    "Retrograde": True
+                }
+        except Exception as e:
+            logger.warning(f"Could not get Rahu/Ketu: {e}")
+        
+        # Get Houses
+        for i, h_attr in enumerate(house_attrs):
+            house = getattr(subject, h_attr, None)
+            if house:
+                sign = house.sign if hasattr(house, 'sign') else house.get('sign', '')
+                pos = house.position if hasattr(house, 'position') else house.get('position', 0)
+                chart_data["D1"]["Houses"][f"House{i+1}"] = {
+                    "Sign": sign,
+                    "Degree": round(pos, 2)
+                }
+        
+        # Calculate Vimshottari Dasha based on Moon nakshatra
+        moon = subject.moon
+        moon_pos = moon.position if hasattr(moon, 'position') else moon.get('position', 0)
+        chart_data["Dasha"] = calculate_vimshottari_dasha(moon_pos, year, month, day)
+        
+        return chart_data
                 
     except Exception as e:
         logger.error(f"Chart calculation error: {e}")
         raise HTTPException(status_code=500, detail=f"Chart calculation failed: {str(e)}")
+
+def get_house_from_position(pos: float, subject) -> int:
+    """Get house number from absolute position"""
+    asc_pos = subject.first_house.position if hasattr(subject.first_house, 'position') else 0
+    relative_pos = (pos - asc_pos) % 360
+    return int(relative_pos / 30) + 1
+
+def get_nakshatra(degree: float) -> str:
+    """Get nakshatra name from degree position within a sign"""
+    nakshatras = [
+        "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra",
+        "Punarvasu", "Pushya", "Ashlesha", "Magha", "Purva Phalguni", "Uttara Phalguni",
+        "Hasta", "Chitra", "Swati", "Vishakha", "Anuradha", "Jyeshtha",
+        "Mula", "Purva Ashadha", "Uttara Ashadha", "Shravana", "Dhanishta", "Shatabhisha",
+        "Purva Bhadrapada", "Uttara Bhadrapada", "Revati"
+    ]
+    # Each nakshatra spans 13°20' (13.333...)
+    nakshatra_span = 360 / 27
+    nakshatra_idx = int(degree / nakshatra_span) % 27
+    return nakshatras[nakshatra_idx]
+
+def get_pada(degree: float) -> int:
+    """Get pada (quarter) of nakshatra"""
+    nakshatra_span = 360 / 27
+    pada_span = nakshatra_span / 4
+    pos_in_nakshatra = degree % nakshatra_span
+    return int(pos_in_nakshatra / pada_span) + 1
+
+def calculate_vimshottari_dasha(moon_degree: float, birth_year: int, birth_month: int, birth_day: int) -> Dict:
+    """Calculate Vimshottari Dasha periods based on Moon's nakshatra"""
+    from datetime import datetime, timedelta
+    
+    # Dasha lords and their periods in years
+    dasha_lords = ["Ketu", "Venus", "Sun", "Moon", "Mars", "Rahu", "Jupiter", "Saturn", "Mercury"]
+    dasha_years = [7, 20, 6, 10, 7, 18, 16, 19, 17]  # Total = 120 years
+    
+    # Get nakshatra index (0-26)
+    nakshatra_span = 360 / 27
+    nakshatra_idx = int(moon_degree / nakshatra_span) % 27
+    
+    # Each nakshatra is ruled by a planet in sequence
+    nakshatra_lords = [
+        "Ketu", "Venus", "Sun", "Moon", "Mars", "Rahu", "Jupiter", "Saturn", "Mercury",
+        "Ketu", "Venus", "Sun", "Moon", "Mars", "Rahu", "Jupiter", "Saturn", "Mercury",
+        "Ketu", "Venus", "Sun", "Moon", "Mars", "Rahu", "Jupiter", "Saturn", "Mercury"
+    ]
+    
+    birth_lord = nakshatra_lords[nakshatra_idx]
+    birth_lord_idx = dasha_lords.index(birth_lord)
+    
+    # Calculate balance of dasha at birth
+    pos_in_nakshatra = moon_degree % nakshatra_span
+    balance_fraction = 1 - (pos_in_nakshatra / nakshatra_span)
+    
+    birth_date = datetime(birth_year, birth_month, birth_day)
+    current_date = datetime.now()
+    
+    # Build Maha Dasha periods
+    maha_dasha = {}
+    dasha_start = birth_date
+    
+    # Start with birth dasha (with balance)
+    first_dasha_years = dasha_years[birth_lord_idx] * balance_fraction
+    dasha_end = dasha_start + timedelta(days=first_dasha_years * 365.25)
+    maha_dasha[birth_lord] = {
+        "start": dasha_start.strftime("%Y-%m-%d"),
+        "end": dasha_end.strftime("%Y-%m-%d"),
+        "years": round(first_dasha_years, 2)
+    }
+    dasha_start = dasha_end
+    
+    # Add remaining dashas
+    for i in range(1, 9):
+        lord_idx = (birth_lord_idx + i) % 9
+        lord = dasha_lords[lord_idx]
+        years = dasha_years[lord_idx]
+        dasha_end = dasha_start + timedelta(days=years * 365.25)
+        maha_dasha[lord] = {
+            "start": dasha_start.strftime("%Y-%m-%d"),
+            "end": dasha_end.strftime("%Y-%m-%d"),
+            "years": years
+        }
+        dasha_start = dasha_end
+    
+    # Find current dasha
+    current_dasha = ""
+    for lord, period in maha_dasha.items():
+        start = datetime.strptime(period["start"], "%Y-%m-%d")
+        end = datetime.strptime(period["end"], "%Y-%m-%d")
+        if start <= current_date <= end:
+            current_dasha = lord
+            break
+    
+    return {
+        "MahaDasha": maha_dasha,
+        "CurrentDasha": current_dasha,
+        "DashaBalance": f"{round(first_dasha_years, 2)} years of {birth_lord}"
+    }
 
 def process_chart_data(raw_chart: Dict[str, Any]) -> Dict[str, Any]:
     """Process raw jyotishyamitra output into structured format"""
