@@ -1,0 +1,135 @@
+{
+  "brand_identity": {
+    "name": "Parasara Astro AI",
+    "tone": "Mystical, Precise, Cosmic, Ancient Wisdom meets Future Tech",
+    "archetype": "The Sage / The Magician",
+    "core_values": ["Accuracy", "Depth", "Clarity", "Reverence"]
+  },
+  "visual_theme": {
+    "theme_mode": "dark",
+    "colors": {
+      "background": {
+        "primary": "#05020a", 
+        "secondary": "#0f0c29",
+        "tertiary": "#1a1638"
+      },
+      "text": {
+        "primary": "#ffffff",
+        "secondary": "#aebbff",
+        "muted": "#6b7280",
+        "accent": "#ffd700"
+      },
+      "brand": {
+        "primary": "#7c3aed",
+        "secondary": "#4c1d95",
+        "accent": "#ffd700",
+        "glow": "rgba(124, 58, 237, 0.5)"
+      },
+      "status": {
+        "success": "#10b981",
+        "error": "#ef4444",
+        "warning": "#f59e0b",
+        "info": "#3b82f6"
+      },
+      "chart": {
+        "border": "#ffd700",
+        "house_bg": "rgba(255, 255, 255, 0.03)",
+        "planet_text": "#e0e7ff",
+        "sign_text": "#9ca3af"
+      }
+    },
+    "typography": {
+      "headings": {
+        "font_family": "Cinzel, serif",
+        "weights": ["400", "700"],
+        "usage": "Page titles, Section headers, Chart titles"
+      },
+      "body": {
+        "font_family": "Inter, sans-serif",
+        "weights": ["300", "400", "500"],
+        "usage": "Predictions, Chat, Form inputs, Data tables"
+      },
+      "mono": {
+        "font_family": "JetBrains Mono, monospace",
+        "usage": "Degrees, Coordinates, Numerical data"
+      }
+    },
+    "effects": {
+      "glassmorphism": {
+        "base": "bg-white/5 backdrop-blur-md border border-white/10 shadow-xl",
+        "hover": "hover:bg-white/10 hover:border-white/20 transition-all duration-300"
+      },
+      "glow": {
+        "text": "text-shadow: 0 0 10px rgba(255, 215, 0, 0.5)",
+        "box": "box-shadow: 0 0 20px rgba(124, 58, 237, 0.3)"
+      },
+      "gradients": {
+        "primary": "bg-gradient-to-r from-violet-900 to-indigo-900",
+        "gold": "bg-gradient-to-r from-amber-200 to-yellow-500",
+        "cosmic": "bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-purple-900 to-slate-900"
+      }
+    }
+  },
+  "layout_strategy": {
+    "landing_page": {
+      "structure": "Hero Section (Full viewport) -> Features Grid -> CTA",
+      "hero_elements": "Nebula background, Floating 3D Zodiac Wheel (optional/static image), Centered 'Get Reading' Button",
+      "animation": "Fade-in entrance, slow parallax on stars"
+    },
+    "app_shell": {
+      "structure": "Sidebar (Left, Collapsible on Mobile) + Main Content Area",
+      "sidebar": "History list, New Chat button, Settings",
+      "main_content": "Dynamic Grid (Bento Box style)"
+    },
+    "chart_view": {
+      "grid_system": "CSS Grid (4x4)",
+      "center_content": "User Details (Name, Rasi, Nakshatra) in the center 2x2 spanning cells",
+      "outer_cells": "The 12 Rashis (Fixed positions for South Indian style)"
+    }
+  },
+  "components": {
+    "ui_library": "shadcn/ui",
+    "custom_components": [
+      {
+        "name": "CosmicCard",
+        "description": "A glassmorphism card with a subtle purple glow border on hover.",
+        "base_class": "relative overflow-hidden rounded-xl border border-white/10 bg-black/40 backdrop-blur-md transition-all hover:border-violet-500/50"
+      },
+      {
+        "name": "StarButton",
+        "description": "Primary action button with a starry gradient.",
+        "base_class": "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-[0_0_15px_rgba(139,92,246,0.5)] rounded-full px-8 py-3 font-cinzel tracking-wider"
+      },
+      {
+        "name": "SouthIndianChart",
+        "description": "The core visualization component.",
+        "specs": "Grid container with 16 cells (4x4). Center 4 cells merged. Fixed Rashi positions. Dynamic Planet placement."
+      }
+    ]
+  },
+  "assets": {
+    "images": {
+      "background_nebula": "https://images.unsplash.com/photo-1754851539824-5a87c5c7cb86?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzR8MHwxfHNlYXJjaHwyfHxkZWVwJTIwc3BhY2UlMjBwdXJwbGUlMjBuZWJ1bGElMjBzdGFycyUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzcyNTYzODI2fDA&ixlib=rb-4.1.0&q=85",
+      "fallback_galaxy": "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&q=80"
+    },
+    "icons": "lucide-react (Stars, Moon, Sun, Sparkles, Scroll, History)"
+  },
+  "universal_guidelines": [
+    "Use 'Cinzel' font for all spiritual/astrological terms (e.g., 'Rasi', 'Lagna', 'Dasha').",
+    "Use 'Inter' for all long-form text and chat responses.",
+    "ALWAYS use a dark theme. There is no light mode for this app.",
+    "Input fields should be transparent with a bottom border that glows gold when focused.",
+    "The South Indian Chart must be square.",
+    "Chat bubbles should be distinct: User (Right, Purple), AI (Left, Glass/Dark Grey).",
+    "Add 'data-testid' to all interactive elements."
+  ],
+  "implementation_steps": [
+    "Step 1: Install fonts (Cinzel, Inter) via Google Fonts in index.css.",
+    "Step 2: Configure tailwind.config.js with the cosmic color palette and font families.",
+    "Step 3: Create the 'CosmicLayout' wrapper component with the nebula background.",
+    "Step 4: Build the 'SouthIndianChart' component using CSS Grid.",
+    "Step 5: Develop the 'BirthDetailsForm' with transparent inputs.",
+    "Step 6: Implement the 'ChatInterface' with typewriter effect for AI responses.",
+    "Step 7: Assemble the pages (Landing, App)."
+  ]
+}
