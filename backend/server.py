@@ -23,11 +23,10 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 # API Keys
-OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', 'sk-emergent-032C47fCb16824bEc8')
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY')
 PROKERALA_CLIENT_ID = os.environ.get('PROKERALA_CLIENT_ID')
 PROKERALA_CLIENT_SECRET = os.environ.get('PROKERALA_CLIENT_SECRET')
-EMERGENT_LLM_KEY = 'sk-emergent-032C47fCb16824bEc8'
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -749,15 +748,15 @@ Be specific, reference actual placements, and provide actionable insights. Use t
 
     try:
         chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
+            api_key=OPENAI_API_KEY,
             session_id=f"prediction_{uuid.uuid4()}",
             system_message=system_prompt
-        ).with_model("openai", "gpt-4o")
+        ).with_model("anthropic", "claude-sonnet-4-5")
         
         response = await chat.send_message(UserMessage(text=user_prompt))
         return response
     except Exception as e:
-        logger.error(f"OpenAI prediction error: {e}")
+        logger.error(f"Prediction generation error: {e}")
         return f"Unable to generate detailed prediction at this time. Error: {str(e)}"
 
 async def chat_with_astrologer(session_id: str, message: str, chart_data: Dict[str, Any]) -> str:
@@ -799,15 +798,15 @@ Please respond helpfully based only on the chart data provided."""
 
     try:
         chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
+            api_key=OPENAI_API_KEY,
             session_id=f"chat_{session_id}",
             system_message=system_prompt
-        ).with_model("openai", "gpt-4o")
+        ).with_model("anthropic", "claude-sonnet-4-5")
         
         response = await chat.send_message(UserMessage(text=full_prompt))
         return response
     except Exception as e:
-        logger.error(f"OpenAI chat error: {e}")
+        logger.error(f"Chat error: {e}")
         return f"I apologize, but I'm having trouble responding right now. Please try again. Error: {str(e)}"
 
 # API Routes
