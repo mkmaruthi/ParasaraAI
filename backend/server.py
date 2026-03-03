@@ -25,6 +25,8 @@ db = client[os.environ['DB_NAME']]
 # API Keys
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY')
+PROKERALA_CLIENT_ID = os.environ.get('PROKERALA_CLIENT_ID')
+PROKERALA_CLIENT_SECRET = os.environ.get('PROKERALA_CLIENT_SECRET')
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -139,12 +141,17 @@ async def geocode_place(place_name: str) -> List[PlaceSearchResult]:
         # Return empty list instead of raising exception for better UX
         return []
 
-# Astrology Calculation using Kerykeion (Vedic/Sidereal)
+# Astrology Calculation using Prokerala API
 def calculate_chart(birth_details: BirthDetailsInput, lat: float, lon: float, tz: str) -> Dict[str, Any]:
-    """Calculate Vedic astrology chart using Kerykeion with Lahiri ayanamsha"""
-    from kerykeion import AstrologicalSubject
+    """Calculate Vedic astrology chart using Prokerala API with Lahiri ayanamsha"""
+    from prokerala_api import ApiClient
+    from datetime import datetime as dt
+    import pytz
     
     try:
+        # Initialize Prokerala API client
+        prokerala_client = ApiClient(PROKERALA_CLIENT_ID, PROKERALA_CLIENT_SECRET)
+        
         # Parse date and time
         dob_parts = birth_details.date_of_birth.split("-")
         year = int(dob_parts[0])
@@ -154,19 +161,36 @@ def calculate_chart(birth_details: BirthDetailsInput, lat: float, lon: float, tz
         time_parts = birth_details.time_of_birth.split(":")
         hour = int(time_parts[0])
         minutes = int(time_parts[1])
+        seconds = int(time_parts[2]) if len(time_parts) > 2 else 0
         
-        # Create Vedic chart with Lahiri ayanamsha
-        subject = AstrologicalSubject(
-            birth_details.name,
-            year, month, day,
-            hour, minutes,
-            lng=lon,
-            lat=lat,
-            tz_str=tz,
-            online=False,
-            zodiac_type="Sidereal",
-            sidereal_mode="LAHIRI"
-        )
+        # Get timezone offset
+        try:
+            tz_obj = pytz.timezone(tz)
+            birth_dt = dt(year, month, day, hour, minutes, seconds)
+            localized_dt = tz_obj.localize(birth_dt)
+            tz_offset = localized_dt.strftime('%z')
+            tz_offset_formatted = f"{tz_offset[:3]}:{tz_offset[3:]}"
+        except:
+            tz_offset_formatted = "+05:30"  # Default to IST
+        
+        # Format datetime for Prokerala API
+        datetime_str = f"{year}-{month:02d}-{day:02d}T{hour:02d}:{minutes:02d}:{seconds:02d}{tz_offset_formatted}"
+        coordinates = f"{lat},{lon}"
+        
+        # API parameters
+        params = {
+            'ayanamsa': 1,  # Lahiri ayanamsha
+            'coordinates': coordinates,
+            'datetime': datetime_str
+        }
+        
+        # Get planet positions
+        planet_result = prokerala_client.get('v2/astrology/planet-position', params)
+        planet_data = planet_result.get('data', {}).get('planet_position', [])
+        
+        # Get advanced kundli data (nakshatra, dasha, yogas)
+        kundli_result = prokerala_client.get('v2/astrology/kundli/advanced', params)
+        kundli_data = kundli_result.get('data', {})
         
         # Build chart data structure
         chart_data = {
@@ -187,107 +211,127 @@ def calculate_chart(birth_details: BirthDetailsInput, lat: float, lon: float, tz
                 "Planets": {},
                 "Houses": {}
             },
-            "Dasha": {}
+            "Dasha": {},
+            "Yogas": [],
+            "MangalDosha": {},
+            "NakshatraDetails": {}
         }
         
-        # Map house attribute names
-        house_attrs = [
-            'first_house', 'second_house', 'third_house', 'fourth_house',
-            'fifth_house', 'sixth_house', 'seventh_house', 'eighth_house',
-            'ninth_house', 'tenth_house', 'eleventh_house', 'twelfth_house'
-        ]
-        
-        # Get Ascendant
-        asc = subject.first_house
-        chart_data["D1"]["Planets"]["Ascendant"] = {
-            "Sign": asc.sign if hasattr(asc, 'sign') else str(asc.get('sign', '')),
-            "Degree": round(asc.position if hasattr(asc, 'position') else asc.get('position', 0), 2),
-            "House": 1,
-            "Nakshatra": get_nakshatra(asc.position if hasattr(asc, 'position') else asc.get('position', 0)),
-            "Pada": get_pada(asc.position if hasattr(asc, 'position') else asc.get('position', 0))
+        # Map Prokerala sign names to standard abbreviations
+        sign_map = {
+            "Mesha": "Aries", "Vrishabha": "Taurus", "Mithuna": "Gemini", 
+            "Karka": "Cancer", "Simha": "Leo", "Kanya": "Virgo",
+            "Tula": "Libra", "Vrischika": "Scorpio", "Dhanu": "Sagittarius",
+            "Makara": "Capricorn", "Kumbha": "Aquarius", "Meena": "Pisces"
         }
         
-        # Planet mapping
-        planet_map = {
-            'sun': 'Sun',
-            'moon': 'Moon', 
-            'mercury': 'Mercury',
-            'venus': 'Venus',
-            'mars': 'Mars',
-            'jupiter': 'Jupiter',
-            'saturn': 'Saturn'
-        }
+        # Process planet positions
+        ascendant_sign = None
+        for planet in planet_data:
+            name = planet.get('name')
+            rasi = planet.get('rasi', {})
+            sign_name = rasi.get('name', '')
+            
+            # Map to English sign name
+            english_sign = sign_map.get(sign_name, sign_name)
+            
+            planet_info = {
+                "Sign": english_sign,
+                "Degree": round(planet.get('degree', 0), 2),
+                "House": planet.get('position', 1),
+                "Retrograde": planet.get('is_retrograde', False),
+                "Longitude": round(planet.get('longitude', 0), 2)
+            }
+            
+            chart_data["D1"]["Planets"][name] = planet_info
+            
+            if name == "Ascendant":
+                ascendant_sign = english_sign
         
-        # Get planetary positions
-        for attr, name in planet_map.items():
-            planet = getattr(subject, attr, None)
-            if planet:
-                sign = planet.sign if hasattr(planet, 'sign') else planet.get('sign', '')
-                pos = planet.position if hasattr(planet, 'position') else planet.get('position', 0)
-                house_name = planet.house if hasattr(planet, 'house') else planet.get('house', '')
-                retro = planet.retrograde if hasattr(planet, 'retrograde') else planet.get('retrograde', False)
-                
-                # Convert house name to number
-                house_num = 1
-                for i, h_attr in enumerate(house_attrs):
-                    if h_attr.replace('_', ' ').title().replace(' ', '_') in str(house_name):
-                        house_num = i + 1
-                        break
-                
-                chart_data["D1"]["Planets"][name] = {
-                    "Sign": sign,
-                    "Degree": round(pos, 2),
-                    "House": house_num,
-                    "Nakshatra": get_nakshatra(pos),
-                    "Pada": get_pada(pos),
-                    "Retrograde": retro
-                }
-        
-        # Get Rahu (North Node) and Ketu (South Node)
-        try:
-            rahu = subject.true_north_lunar_node if hasattr(subject, 'true_north_lunar_node') else subject.true_node
-            if rahu:
-                sign = rahu.sign if hasattr(rahu, 'sign') else rahu.get('sign', '')
-                pos = rahu.position if hasattr(rahu, 'position') else rahu.get('position', 0)
-                chart_data["D1"]["Planets"]["Rahu"] = {
-                    "Sign": sign,
-                    "Degree": round(pos, 2),
-                    "House": get_house_from_position(pos, subject),
-                    "Nakshatra": get_nakshatra(pos),
-                    "Pada": get_pada(pos),
-                    "Retrograde": True
-                }
-                
-                # Ketu is opposite to Rahu
-                ketu_pos = (pos + 180) % 360
-                ketu_sign_idx = int(ketu_pos / 30)
-                ketu_signs = ["Ari", "Tau", "Gem", "Can", "Leo", "Vir", "Lib", "Sco", "Sag", "Cap", "Aqu", "Pis"]
-                chart_data["D1"]["Planets"]["Ketu"] = {
-                    "Sign": ketu_signs[ketu_sign_idx],
-                    "Degree": round(ketu_pos % 30, 2),
-                    "House": get_house_from_position(ketu_pos, subject),
-                    "Nakshatra": get_nakshatra(ketu_pos % 30),
-                    "Pada": get_pada(ketu_pos % 30),
-                    "Retrograde": True
-                }
-        except Exception as e:
-            logger.warning(f"Could not get Rahu/Ketu: {e}")
-        
-        # Get Houses
-        for i, h_attr in enumerate(house_attrs):
-            house = getattr(subject, h_attr, None)
-            if house:
-                sign = house.sign if hasattr(house, 'sign') else house.get('sign', '')
-                pos = house.position if hasattr(house, 'position') else house.get('position', 0)
+        # Build houses based on ascendant position
+        if ascendant_sign:
+            sign_order = ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+                         "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"]
+            asc_idx = sign_order.index(ascendant_sign) if ascendant_sign in sign_order else 0
+            
+            for i in range(12):
+                house_sign = sign_order[(asc_idx + i) % 12]
                 chart_data["D1"]["Houses"][f"House{i+1}"] = {
-                    "Sign": sign,
-                    "Degree": round(pos, 2)
+                    "Sign": house_sign,
+                    "Number": i + 1
                 }
         
-        # Calculate Vimshottari Dasha based on Moon nakshatra
-        moon = subject.moon
-        moon_pos = moon.position if hasattr(moon, 'position') else moon.get('position', 0)
-        chart_data["Dasha"] = calculate_vimshottari_dasha(moon_pos, year, month, day)
+        # Process nakshatra details
+        nakshatra_details = kundli_data.get('nakshatra_details', {})
+        if nakshatra_details:
+            nakshatra = nakshatra_details.get('nakshatra', {})
+            chandra_rasi = nakshatra_details.get('chandra_rasi', {})
+            soorya_rasi = nakshatra_details.get('soorya_rasi', {})
+            
+            chart_data["NakshatraDetails"] = {
+                "nakshatra": nakshatra.get('name', ''),
+                "pada": nakshatra.get('pada', 1),
+                "lord": nakshatra.get('lord', {}).get('name', ''),
+                "moon_sign": sign_map.get(chandra_rasi.get('name', ''), chandra_rasi.get('name', '')),
+                "sun_sign": sign_map.get(soorya_rasi.get('name', ''), soorya_rasi.get('name', '')),
+                "additional_info": nakshatra_details.get('additional_info', {})
+            }
+        
+        # Process dasha periods
+        dasha_periods = kundli_data.get('dasha_periods', [])
+        dasha_balance = kundli_data.get('dasha_balance', {})
+        
+        if dasha_periods:
+            maha_dasha = {}
+            current_dasha = ""
+            current_time = dt.now(pytz.UTC)
+            
+            for dasha in dasha_periods:
+                lord_name = dasha.get('name', '')
+                start_str = dasha.get('start', '')
+                end_str = dasha.get('end', '')
+                
+                maha_dasha[lord_name] = {
+                    "start": start_str,
+                    "end": end_str,
+                    "antardasha": dasha.get('antardasha', [])
+                }
+                
+                # Check if this is current dasha
+                try:
+                    start_dt = dt.fromisoformat(start_str.replace('+05:30', '+0530'))
+                    end_dt = dt.fromisoformat(end_str.replace('+05:30', '+0530'))
+                    if start_dt <= current_time <= end_dt:
+                        current_dasha = lord_name
+                except:
+                    pass
+            
+            chart_data["Dasha"] = {
+                "MahaDasha": maha_dasha,
+                "CurrentDasha": current_dasha,
+                "DashaBalance": dasha_balance
+            }
+        
+        # Process yogas
+        yoga_details = kundli_data.get('yoga_details', [])
+        present_yogas = []
+        for yoga_group in yoga_details:
+            for yoga in yoga_group.get('yoga_list', []):
+                if yoga.get('has_yoga', False):
+                    present_yogas.append({
+                        "name": yoga.get('name', ''),
+                        "description": yoga.get('description', '')
+                    })
+        chart_data["Yogas"] = present_yogas
+        
+        # Process Mangal Dosha
+        mangal_dosha = kundli_data.get('mangal_dosha', {})
+        chart_data["MangalDosha"] = {
+            "has_dosha": mangal_dosha.get('has_dosha', False),
+            "description": mangal_dosha.get('description', ''),
+            "exceptions": mangal_dosha.get('exceptions', []),
+            "remedies": mangal_dosha.get('remedies', [])
+        }
         
         return chart_data
                 
@@ -394,7 +438,7 @@ def calculate_vimshottari_dasha(moon_degree: float, birth_year: int, birth_month
     }
 
 def process_chart_data(raw_chart: Dict[str, Any]) -> Dict[str, Any]:
-    """Process raw jyotishyamitra output into structured format"""
+    """Process Prokerala API output into structured format for frontend"""
     processed = {
         "birth_info": {},
         "ascendant": {},
@@ -403,7 +447,8 @@ def process_chart_data(raw_chart: Dict[str, Any]) -> Dict[str, Any]:
         "dasha": {},
         "nakshatra": {},
         "yogas": [],
-        "chart_layout": {}
+        "chart_layout": {},
+        "mangal_dosha": {}
     }
     
     try:
@@ -414,7 +459,7 @@ def process_chart_data(raw_chart: Dict[str, Any]) -> Dict[str, Any]:
                 "name": bd.get("Name", ""),
                 "gender": bd.get("Gender", ""),
                 "date": f"{bd.get('Year', '')}-{bd.get('Month', ''):02d}-{bd.get('Day', ''):02d}" if bd.get('Year') else "",
-                "time": f"{bd.get('Hour', 0):02d}:{bd.get('Minute', 0):02d}:{bd.get('Second', 0):02d}",
+                "time": f"{bd.get('Hour', 0):02d}:{bd.get('Minute', 0):02d}:00",
                 "place": bd.get("Place", ""),
                 "latitude": bd.get("Latitude", 0),
                 "longitude": bd.get("Longitude", 0),
@@ -430,9 +475,12 @@ def process_chart_data(raw_chart: Dict[str, Any]) -> Dict[str, Any]:
                 sign = planet_info.get("Sign", "")
                 house = planet_info.get("House", 1)
                 degree = planet_info.get("Degree", 0)
-                nakshatra = planet_info.get("Nakshatra", "")
-                pada = planet_info.get("Pada", 1)
                 retro = planet_info.get("Retrograde", False)
+                longitude = planet_info.get("Longitude", 0)
+                
+                # Calculate nakshatra from longitude
+                nakshatra = get_nakshatra_from_longitude(longitude)
+                pada = get_pada_from_longitude(longitude)
                 
                 planet_entry = {
                     "name": planet_name,
@@ -452,20 +500,24 @@ def process_chart_data(raw_chart: Dict[str, Any]) -> Dict[str, Any]:
         # Extract Ascendant
         asc_info = planets_data.get("Ascendant", {})
         if asc_info:
+            asc_longitude = asc_info.get("Longitude", 0)
             processed["ascendant"] = {
                 "sign": asc_info.get("Sign", ""),
                 "degree": round(asc_info.get("Degree", 0), 2),
-                "nakshatra": asc_info.get("Nakshatra", ""),
-                "pada": asc_info.get("Pada", 1)
+                "nakshatra": get_nakshatra_from_longitude(asc_longitude),
+                "pada": get_pada_from_longitude(asc_longitude)
             }
         
-        # Extract Moon sign (Rasi)
-        moon_info = planets_data.get("Moon", {})
-        if moon_info:
+        # Extract nakshatra details from Prokerala
+        nakshatra_details = raw_chart.get("NakshatraDetails", {})
+        if nakshatra_details:
             processed["nakshatra"] = {
-                "moon_sign": moon_info.get("Sign", ""),
-                "nakshatra": moon_info.get("Nakshatra", ""),
-                "pada": moon_info.get("Pada", 1)
+                "moon_sign": nakshatra_details.get("moon_sign", ""),
+                "nakshatra": nakshatra_details.get("nakshatra", ""),
+                "pada": nakshatra_details.get("pada", 1),
+                "lord": nakshatra_details.get("lord", ""),
+                "sun_sign": nakshatra_details.get("sun_sign", ""),
+                "additional_info": nakshatra_details.get("additional_info", {})
             }
         
         # Extract Dasha information
@@ -473,18 +525,30 @@ def process_chart_data(raw_chart: Dict[str, Any]) -> Dict[str, Any]:
         if dasha_info:
             processed["dasha"] = {
                 "maha_dasha": dasha_info.get("MahaDasha", {}),
-                "antar_dasha": dasha_info.get("AntarDasha", {}),
                 "current_dasha": dasha_info.get("CurrentDasha", ""),
-                "dasha_balance": dasha_info.get("DashaBalance", "")
+                "dasha_balance": dasha_info.get("DashaBalance", {})
             }
+        
+        # Extract Yogas
+        yogas = raw_chart.get("Yogas", [])
+        processed["yogas"] = yogas
+        
+        # Extract Mangal Dosha
+        mangal_dosha = raw_chart.get("MangalDosha", {})
+        processed["mangal_dosha"] = mangal_dosha
         
         # Build chart layout for South Indian style
         asc_sign = processed["ascendant"].get("sign", "Aries")
-        asc_index = SIGN_ORDER.index(asc_sign) if asc_sign in SIGN_ORDER else 0
+        
+        # Standard sign order
+        sign_order = ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+                     "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"]
+        
+        asc_index = sign_order.index(asc_sign) if asc_sign in sign_order else 0
         
         chart_layout = {}
         for i in range(12):
-            sign = SIGN_ORDER[(asc_index + i) % 12]
+            sign = sign_order[(asc_index + i) % 12]
             house_num = i + 1
             position = SOUTH_INDIAN_POSITIONS.get(sign, (0, 0))
             
@@ -502,7 +566,7 @@ def process_chart_data(raw_chart: Dict[str, Any]) -> Dict[str, Any]:
         
         processed["chart_layout"] = chart_layout
         
-        # Extract houses
+        # Build houses list
         houses_data = raw_chart.get("D1", {}).get("Houses", {})
         for i in range(1, 13):
             house_key = f"House{i}"
@@ -510,19 +574,33 @@ def process_chart_data(raw_chart: Dict[str, Any]) -> Dict[str, Any]:
             processed["houses"].append({
                 "number": i,
                 "sign": house_info.get("Sign", ""),
-                "degree": house_info.get("Degree", 0),
                 "planets": [p["name"] for p in house_planets.get(i, [])]
             })
-        
-        # Extract yogas if available
-        yogas_data = raw_chart.get("Yogas", [])
-        if yogas_data:
-            processed["yogas"] = yogas_data
             
     except Exception as e:
         logger.error(f"Error processing chart data: {e}")
     
     return processed
+
+def get_nakshatra_from_longitude(longitude: float) -> str:
+    """Get nakshatra name from absolute longitude"""
+    nakshatras = [
+        "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra",
+        "Punarvasu", "Pushya", "Ashlesha", "Magha", "Purva Phalguni", "Uttara Phalguni",
+        "Hasta", "Chitra", "Swati", "Vishakha", "Anuradha", "Jyeshtha",
+        "Mula", "Purva Ashadha", "Uttara Ashadha", "Shravana", "Dhanishta", "Shatabhisha",
+        "Purva Bhadrapada", "Uttara Bhadrapada", "Revati"
+    ]
+    nakshatra_span = 360 / 27  # 13.333... degrees
+    nakshatra_idx = int(longitude / nakshatra_span) % 27
+    return nakshatras[nakshatra_idx]
+
+def get_pada_from_longitude(longitude: float) -> int:
+    """Get pada from absolute longitude"""
+    nakshatra_span = 360 / 27
+    pada_span = nakshatra_span / 4
+    pos_in_nakshatra = longitude % nakshatra_span
+    return int(pos_in_nakshatra / pada_span) + 1
 
 # OpenAI Integration for Interpretation
 async def generate_prediction(chart_data: Dict[str, Any], birth_name: str) -> str:
