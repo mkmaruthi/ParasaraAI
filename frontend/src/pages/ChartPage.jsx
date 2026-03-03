@@ -296,7 +296,7 @@ const ChartPage = () => {
           </div>
           
           {/* Place of Birth */}
-          <div className="space-y-2 relative">
+          <div className="space-y-2">
             <Label htmlFor="placeOfBirth" className="text-cosmic-text-secondary flex items-center gap-2">
               <MapPin className="w-4 h-4" />
               Place of Birth
@@ -318,38 +318,38 @@ const ChartPage = () => {
                   <Loader2 className="w-4 h-4 animate-spin text-cosmic-brand-accent" />
                 </div>
               )}
-            </div>
-            
-            {/* Place Results - Auto-suggest dropdown */}
-            {placeResults.length > 0 && !selectedPlace && (
-              <div 
-                className="absolute z-50 w-full mt-1 bg-cosmic-bg-secondary/95 backdrop-blur-md rounded-lg border border-white/10 shadow-xl overflow-hidden" 
-                data-testid="place-results"
-              >
-                <p className="text-xs text-cosmic-text-muted px-3 py-2 border-b border-white/5">
-                  Select your birthplace:
-                </p>
-                <div className="max-h-60 overflow-y-auto">
-                  {placeResults.map((place, index) => (
-                    <button
-                      key={index}
-                      type="button"
-                      onClick={() => selectPlace(place)}
-                      className="w-full text-left px-3 py-2.5 hover:bg-cosmic-brand-primary/30 text-sm text-white transition-colors border-b border-white/5 last:border-0"
-                      data-testid={`place-option-${index}`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <MapPin className="w-3 h-3 text-cosmic-brand-accent flex-shrink-0" />
-                        <span className="truncate">{place.formatted_address}</span>
-                      </span>
-                      <span className="text-xs text-cosmic-text-muted ml-5 block mt-0.5">
-                        {place.latitude.toFixed(4)}°, {place.longitude.toFixed(4)}° • {place.timezone}
-                      </span>
-                    </button>
-                  ))}
+              
+              {/* Place Results - Auto-suggest dropdown */}
+              {placeResults.length > 0 && !selectedPlace && (
+                <div 
+                  className="absolute left-0 right-0 top-full z-50 mt-1 bg-cosmic-bg-secondary/95 backdrop-blur-md rounded-lg border border-white/10 shadow-xl overflow-hidden" 
+                  data-testid="place-results"
+                >
+                  <p className="text-xs text-cosmic-text-muted px-3 py-2 border-b border-white/5">
+                    Select your birthplace:
+                  </p>
+                  <div className="max-h-60 overflow-y-auto">
+                    {placeResults.map((place, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => selectPlace(place)}
+                        className="w-full text-left px-3 py-2.5 hover:bg-cosmic-brand-primary/30 text-sm text-white transition-colors border-b border-white/5 last:border-0"
+                        data-testid={`place-option-${index}`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <MapPin className="w-3 h-3 text-cosmic-brand-accent flex-shrink-0" />
+                          <span className="truncate">{place.formatted_address}</span>
+                        </span>
+                        <span className="text-xs text-cosmic-text-muted ml-5 block mt-0.5">
+                          {place.latitude.toFixed(4)}°, {place.longitude.toFixed(4)}° • {place.timezone}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
             
             {/* Selected Place Info */}
             {selectedPlace && (
