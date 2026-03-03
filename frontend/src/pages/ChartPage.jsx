@@ -34,6 +34,9 @@ const ChartPage = () => {
     name: '',
     dateOfBirth: '',
     timeOfBirth: '',
+    timeHour: '',
+    timeMinute: '',
+    timeSecond: '',
     placeOfBirth: '',
     gender: 'unknown',
     latitude: '',
@@ -214,28 +217,82 @@ const ChartPage = () => {
             />
           </div>
           
-          {/* Time of Birth */}
+          {/* Time of Birth - Custom 24-hour format input */}
           <div className="space-y-2">
-            <Label htmlFor="timeOfBirth" className="text-cosmic-text-secondary flex items-center gap-2">
+            <Label className="text-cosmic-text-secondary flex items-center gap-2">
               <Clock className="w-4 h-4" />
               Time of Birth (24-hour format)
             </Label>
             <div className="flex items-center gap-2">
-              <Input
-                id="timeOfBirth"
-                name="timeOfBirth"
-                type="time"
-                step="1"
-                value={formData.timeOfBirth}
-                onChange={handleInputChange}
-                className="flex-1 bg-transparent border-b border-white/20 rounded-none focus:border-cosmic-brand-accent focus:ring-0 text-white [color-scheme:dark]"
-                data-testid="time-input"
-              />
-              <span className="text-cosmic-text-muted text-sm whitespace-nowrap">
-                {formData.timeOfBirth ? `(${formData.timeOfBirth})` : '(HH:MM:SS)'}
+              <div className="flex items-center gap-1 flex-1">
+                <Input
+                  id="timeHour"
+                  name="timeHour"
+                  type="number"
+                  min="0"
+                  max="23"
+                  placeholder="HH"
+                  value={formData.timeHour || ''}
+                  onChange={(e) => {
+                    const val = Math.min(23, Math.max(0, parseInt(e.target.value) || 0));
+                    const padded = e.target.value === '' ? '' : val.toString().padStart(2, '0');
+                    setFormData(prev => ({
+                      ...prev,
+                      timeHour: padded,
+                      timeOfBirth: `${padded || '00'}:${prev.timeMinute || '00'}:${prev.timeSecond || '00'}`
+                    }));
+                  }}
+                  className="w-16 text-center bg-transparent border-b border-white/20 rounded-none focus:border-cosmic-brand-accent focus:ring-0 text-white"
+                  data-testid="time-hour-input"
+                />
+                <span className="text-cosmic-text-muted text-lg">:</span>
+                <Input
+                  id="timeMinute"
+                  name="timeMinute"
+                  type="number"
+                  min="0"
+                  max="59"
+                  placeholder="MM"
+                  value={formData.timeMinute || ''}
+                  onChange={(e) => {
+                    const val = Math.min(59, Math.max(0, parseInt(e.target.value) || 0));
+                    const padded = e.target.value === '' ? '' : val.toString().padStart(2, '0');
+                    setFormData(prev => ({
+                      ...prev,
+                      timeMinute: padded,
+                      timeOfBirth: `${prev.timeHour || '00'}:${padded || '00'}:${prev.timeSecond || '00'}`
+                    }));
+                  }}
+                  className="w-16 text-center bg-transparent border-b border-white/20 rounded-none focus:border-cosmic-brand-accent focus:ring-0 text-white"
+                  data-testid="time-minute-input"
+                />
+                <span className="text-cosmic-text-muted text-lg">:</span>
+                <Input
+                  id="timeSecond"
+                  name="timeSecond"
+                  type="number"
+                  min="0"
+                  max="59"
+                  placeholder="SS"
+                  value={formData.timeSecond || ''}
+                  onChange={(e) => {
+                    const val = Math.min(59, Math.max(0, parseInt(e.target.value) || 0));
+                    const padded = e.target.value === '' ? '' : val.toString().padStart(2, '0');
+                    setFormData(prev => ({
+                      ...prev,
+                      timeSecond: padded,
+                      timeOfBirth: `${prev.timeHour || '00'}:${prev.timeMinute || '00'}:${padded || '00'}`
+                    }));
+                  }}
+                  className="w-16 text-center bg-transparent border-b border-white/20 rounded-none focus:border-cosmic-brand-accent focus:ring-0 text-white"
+                  data-testid="time-second-input"
+                />
+              </div>
+              <span className="text-cosmic-text-secondary text-sm font-mono bg-cosmic-bg-secondary/50 px-2 py-1 rounded">
+                {formData.timeOfBirth || '00:00:00'}
               </span>
             </div>
-            <p className="text-xs text-cosmic-text-muted">Enter time in 24-hour format (e.g., 14:30 for 2:30 PM). Seconds optional.</p>
+            <p className="text-xs text-cosmic-text-muted">Hours (0-23) : Minutes (0-59) : Seconds (0-59)</p>
           </div>
           
           {/* Place of Birth */}
