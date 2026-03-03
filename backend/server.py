@@ -225,8 +225,32 @@ def calculate_chart(birth_details: BirthDetailsInput, lat: float, lon: float, tz
             "Makara": "Capricorn", "Kumbha": "Aquarius", "Meena": "Pisces"
         }
         
-        # Process planet positions
+        # Standard sign order for house calculation
+        sign_order = ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+                     "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"]
+        
+        # First pass: Find Ascendant sign
         ascendant_sign = None
+        for planet in planet_data:
+            if planet.get('name') == "Ascendant":
+                rasi = planet.get('rasi', {})
+                sign_name = rasi.get('name', '')
+                ascendant_sign = sign_map.get(sign_name, sign_name)
+                break
+        
+        # Get Ascendant index for house calculation
+        asc_idx = sign_order.index(ascendant_sign) if ascendant_sign in sign_order else 0
+        
+        # Helper function to calculate house number from sign
+        def get_house_from_sign(planet_sign):
+            if planet_sign in sign_order:
+                planet_sign_idx = sign_order.index(planet_sign)
+                # House = (planet_sign_index - ascendant_index) mod 12 + 1
+                house = ((planet_sign_idx - asc_idx) % 12) + 1
+                return house
+            return 1
+        
+        # Second pass: Process all planets with correct house numbers
         for planet in planet_data:
             name = planet.get('name')
             rasi = planet.get('rasi', {})
@@ -235,25 +259,21 @@ def calculate_chart(birth_details: BirthDetailsInput, lat: float, lon: float, tz
             # Map to English sign name
             english_sign = sign_map.get(sign_name, sign_name)
             
+            # Calculate house based on sign relative to Ascendant
+            house_num = get_house_from_sign(english_sign)
+            
             planet_info = {
                 "Sign": english_sign,
                 "Degree": round(planet.get('degree', 0), 2),
-                "House": planet.get('position', 1),
+                "House": house_num,  # Calculated relative to Ascendant
                 "Retrograde": planet.get('is_retrograde', False),
                 "Longitude": round(planet.get('longitude', 0), 2)
             }
             
             chart_data["D1"]["Planets"][name] = planet_info
-            
-            if name == "Ascendant":
-                ascendant_sign = english_sign
         
         # Build houses based on ascendant position
         if ascendant_sign:
-            sign_order = ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
-                         "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"]
-            asc_idx = sign_order.index(ascendant_sign) if ascendant_sign in sign_order else 0
-            
             for i in range(12):
                 house_sign = sign_order[(asc_idx + i) % 12]
                 chart_data["D1"]["Houses"][f"House{i+1}"] = {
