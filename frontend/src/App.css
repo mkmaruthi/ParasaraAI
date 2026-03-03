@@ -1,34 +1,149 @@
-.App-logo {
-    height: 40vmin;
+/* Additional App Styles */
+.App {
+    min-height: 100vh;
+}
+
+/* Nebula overlay */
+.nebula-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url('https://images.unsplash.com/photo-1754851539824-5a87c5c7cb86?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzR8MHwxfHNlYXJjaHwyfHxkZWVwJTIwc3BhY2UlMjBwdXJwbGUlMjBuZWJ1bGElMjBzdGFycyUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzcyNTYzODI2fDA&ixlib=rb-4.1.0&q=85');
+    background-size: cover;
+    background-position: center;
+    opacity: 0.15;
+    z-index: -1;
     pointer-events: none;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
-}
-
-.App-header {
-    background-color: #0f0f10;
+/* Hero section */
+.hero-section {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+    text-align: center;
+    padding: 2rem;
+    position: relative;
 }
 
-.App-link {
-    color: #61dafb;
+/* Data panel styling */
+.data-panel {
+    background: rgba(5, 2, 10, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 215, 0, 0.2);
+    border-radius: 1rem;
+    padding: 1.5rem;
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
+.data-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.data-row:last-child {
+    border-bottom: none;
+}
+
+.data-label {
+    color: #9ca3af;
+    font-size: 0.875rem;
+}
+
+.data-value {
+    color: #e0e7ff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.875rem;
+}
+
+/* History sidebar */
+.history-sidebar {
+    background: rgba(5, 2, 10, 0.95);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    height: 100vh;
+    overflow-y: auto;
+}
+
+.history-item {
+    padding: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.history-item:hover {
+    background: rgba(124, 58, 237, 0.1);
+}
+
+.history-item.active {
+    background: rgba(124, 58, 237, 0.2);
+    border-left: 3px solid #7c3aed;
+}
+
+/* Markdown styling in predictions */
+.prediction-content h1,
+.prediction-content h2,
+.prediction-content h3 {
+    font-family: 'Cinzel', serif;
+    color: #ffd700;
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.prediction-content h1 { font-size: 1.5rem; }
+.prediction-content h2 { font-size: 1.25rem; }
+.prediction-content h3 { font-size: 1.1rem; }
+
+.prediction-content p {
+    margin-bottom: 1rem;
+    line-height: 1.7;
+    color: #e0e7ff;
+}
+
+.prediction-content ul,
+.prediction-content ol {
+    margin-bottom: 1rem;
+    padding-left: 1.5rem;
+}
+
+.prediction-content li {
+    margin-bottom: 0.5rem;
+    color: #aebbff;
+}
+
+.prediction-content strong {
+    color: #ffd700;
+}
+
+/* Chat input area */
+.chat-input-area {
+    background: rgba(15, 12, 41, 0.8);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 1rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .south-indian-chart {
+        max-width: 100%;
     }
-    to {
-        transform: rotate(360deg);
+    
+    .chart-cell {
+        min-height: 60px;
+        padding: 0.25rem;
+    }
+    
+    .chart-sign {
+        font-size: 0.55rem;
+    }
+    
+    .chart-planets {
+        font-size: 0.7rem;
     }
 }
