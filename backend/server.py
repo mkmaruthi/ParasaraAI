@@ -23,10 +23,11 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 # API Keys
-OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', 'sk-emergent-032C47fCb16824bEc8')
 GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY')
 PROKERALA_CLIENT_ID = os.environ.get('PROKERALA_CLIENT_ID')
 PROKERALA_CLIENT_SECRET = os.environ.get('PROKERALA_CLIENT_SECRET')
+EMERGENT_LLM_KEY = 'sk-emergent-032C47fCb16824bEc8'
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -624,50 +625,140 @@ def get_pada_from_longitude(longitude: float) -> int:
 
 # OpenAI Integration for Interpretation
 async def generate_prediction(chart_data: Dict[str, Any], birth_name: str) -> str:
-    """Generate astrological prediction using OpenAI GPT-5.2"""
+    """Generate detailed astrological prediction based on Brihat Parashara Hora Shastra using OpenAI GPT-5.2"""
     from emergentintegrations.llm.chat import LlmChat, UserMessage
+    from datetime import datetime
     
-    system_prompt = """You are Parasara Astro AI, an expert Vedic astrologer providing insightful and personalized readings.
-
-IMPORTANT RULES:
-1. ONLY use the chart data provided - never invent or calculate positions
-2. If data is missing, acknowledge it gracefully
-3. Be insightful but not overly mystical
-4. Provide practical, actionable insights
-5. Always refer to specific placements from the provided data
-6. Use proper Vedic astrology terminology
-7. Keep predictions balanced - mention both opportunities and challenges
-
-Structure your prediction with these sections:
-- Personality & Core Nature (based on Ascendant and Moon)
-- Career & Professional Life
-- Relationships & Family
-- Finances & Material Life
-- Current Period Analysis (based on Dasha)
-- Key Life Themes & Advice"""
-
-    chart_summary = json.dumps(chart_data, indent=2)
+    current_year = datetime.now().year
     
-    user_prompt = f"""Please provide a comprehensive Vedic astrology reading for {birth_name}.
+    system_prompt = """You are Parasara Astro AI, an expert Vedic astrologer specializing in Brihat Parashara Hora Shastra (BPHS). 
+You provide detailed, scholarly, and authentic Vedic astrology readings with practical insights.
 
-Here is the complete chart data computed from their birth details:
+CRITICAL RULES:
+1. ONLY use the chart data provided - never invent positions or calculations
+2. Apply BPHS principles rigorously
+3. Use proper Sanskrit terminology with English explanations
+4. Provide specific house-by-house analysis
+5. Include both favorable and challenging indications
+6. Reference specific planetary placements from the data
+7. Use markdown tables for organized presentation
+8. Be thorough but clear and readable"""
+
+    # Extract key data for prompt
+    planets_data = chart_data.get("planets", [])
+    ascendant = chart_data.get("ascendant", {})
+    nakshatra = chart_data.get("nakshatra", {})
+    dasha = chart_data.get("dasha", {})
+    yogas = chart_data.get("yogas", [])
+    
+    # Build planets summary
+    planets_summary = ""
+    for p in planets_data:
+        retro = " (R)" if p.get("retrograde") else ""
+        planets_summary += f"- {p.get('name')}: {p.get('sign')} in House {p.get('house')}, {p.get('degree')}°{retro}\n"
+    
+    chart_summary = f"""
+BIRTH CHART DATA:
+================
+Name: {birth_name}
+Ascendant (Lagna): {ascendant.get('sign', 'N/A')} at {ascendant.get('degree', 0)}°
+Moon Sign (Rasi): {nakshatra.get('moon_sign', 'N/A')}
+Nakshatra: {nakshatra.get('nakshatra', 'N/A')} Pada {nakshatra.get('pada', 1)}
+
+PLANETARY POSITIONS:
+{planets_summary}
+
+CURRENT DASHA:
+Maha Dasha: {dasha.get('current_dasha', 'N/A')}
+
+YOGAS PRESENT:
+{', '.join([y.get('name', '') for y in yogas]) if yogas else 'See analysis below'}
+
+FULL RAW DATA:
+{json.dumps(chart_data, indent=2, default=str)}
+"""
+    
+    user_prompt = f"""Generate a comprehensive Vedic astrology report for {birth_name} based on Brihat Parashara Hora Shastra.
 
 {chart_summary}
 
-Provide a personalized prediction covering all major life areas based ONLY on this computed data."""
+Please provide a DETAILED report with the following sections using markdown formatting:
+
+## 1. PLANETARY DIGNITY ANALYSIS
+Create a table showing:
+| Planet | Sign | House | Status (Exalted/Debilitated/Own/Friend/Enemy) | Strength |
+
+Analyze each planet's dignity according to BPHS.
+
+## 2. BENEFIC AND MALEFIC CLASSIFICATION
+### Natural Benefics & Malefics
+### Functional Benefics & Malefics (based on Lagna)
+Explain which planets are yogakarakas for this Lagna.
+
+## 3. KARAKA ANALYSIS
+Analyze each Karaka planet:
+- Atmakaraka (Soul significator)
+- Amatyakaraka (Career)  
+- Bhratrukaraka (Siblings)
+- Matrukaraka (Mother)
+- Putrakaraka (Children)
+- Gnatikaraka (Relatives)
+- Darakaraka (Spouse)
+
+## 4. YOGA ANALYSIS
+Identify and explain prominent yogas:
+- Raj Yogas
+- Dhana Yogas
+- Arishta Yogas
+- Special Combinations
+For each yoga, explain the formation and effects.
+
+## 5. PLANETARY COMBINATIONS & EFFECTS
+Analyze significant conjunctions, aspects, and combinations.
+
+## 6. HOUSE-BY-HOUSE LIFE ANALYSIS
+For EACH house (1st through 12th), provide:
+- Planets placed
+- Lord and its placement
+- Key significations and predictions
+
+Then provide specific detailed sections for:
+
+### EDUCATION (4th, 5th, 9th houses)
+### CAREER (10th, 6th, 2nd houses)  
+### FAMILY & HOME (4th, 2nd houses)
+### RELATIONSHIPS & MARRIAGE (7th, Venus, Jupiter)
+### CHILDREN (5th house, Jupiter)
+### INVESTMENTS & WEALTH (2nd, 11th, 5th houses)
+
+## 7. DASHA ANALYSIS - LAST 5 YEARS ({current_year-5} to {current_year})
+Create a year-by-year table:
+| Year | Dasha/Antardasha | Gochara Highlights | Positive Events | Challenges |
+
+## 8. DASHA ANALYSIS - NEXT 5 YEARS ({current_year} to {current_year+5})
+Create a year-by-year table:
+| Year | Dasha/Antardasha | Gochara Highlights | Opportunities | Cautions |
+
+## 9. KEY RECOMMENDATIONS
+- Favorable periods
+- Remedial measures (gemstones, mantras, donations)
+- Career guidance
+- Relationship advice
+
+Be specific, reference actual placements, and provide actionable insights. Use tables wherever helpful."""
 
     try:
         chat = LlmChat(
-            api_key=OPENAI_API_KEY,
+            api_key=EMERGENT_LLM_KEY,
             session_id=f"prediction_{uuid.uuid4()}",
             system_message=system_prompt
-        ).with_model("openai", "gpt-5.2")
+        ).with_model("openai", "gpt-4o")
         
         response = await chat.send_message(UserMessage(text=user_prompt))
         return response
     except Exception as e:
         logger.error(f"OpenAI prediction error: {e}")
-        return f"Unable to generate detailed prediction at this time. Please review your chart data directly. Error: {str(e)}"
+        return f"Unable to generate detailed prediction at this time. Error: {str(e)}"
 
 async def chat_with_astrologer(session_id: str, message: str, chart_data: Dict[str, Any]) -> str:
     """Chat with AI astrologer about the chart"""
@@ -708,10 +799,10 @@ Please respond helpfully based only on the chart data provided."""
 
     try:
         chat = LlmChat(
-            api_key=OPENAI_API_KEY,
+            api_key=EMERGENT_LLM_KEY,
             session_id=f"chat_{session_id}",
             system_message=system_prompt
-        ).with_model("openai", "gpt-5.2")
+        ).with_model("openai", "gpt-4o")
         
         response = await chat.send_message(UserMessage(text=full_prompt))
         return response
@@ -787,6 +878,10 @@ async def generate_chart(birth_details: BirthDetailsInput):
         },
         chart_data=processed_chart
     )
+    
+    # Store prediction in chart_data for persistence
+    processed_chart["prediction"] = prediction
+    session.chart_data = processed_chart
     
     # Save to database
     session_doc = session.model_dump()

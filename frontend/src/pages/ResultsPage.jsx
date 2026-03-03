@@ -369,15 +369,21 @@ const ResultsPage = () => {
 
             {/* Prediction Tab */}
             <TabsContent value="prediction">
-              <div className="glass-card p-6 max-w-4xl mx-auto">
+              <div className="glass-card p-6 max-w-5xl mx-auto overflow-auto max-h-[calc(100vh-250px)]">
                 <h2 className="font-cinzel text-cosmic-brand-accent text-xl mb-6">
-                  Your Personalized Reading
+                  Detailed Vedic Astrology Report (BPHS)
                 </h2>
                 <div className="prediction-content prose prose-invert max-w-none" data-testid="prediction-content">
-                  {session?.chart_data?.raw_data?.prediction ? (
+                  {session?.chart_data?.prediction ? (
+                    <PredictionRenderer content={session.chart_data.prediction} />
+                  ) : session?.chart_data?.raw_data?.prediction ? (
                     <PredictionRenderer content={session.chart_data.raw_data.prediction} />
                   ) : (
-                    <p className="text-cosmic-text-muted">Loading prediction...</p>
+                    <div className="text-center py-12">
+                      <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-cosmic-brand-accent" />
+                      <p className="text-cosmic-text-muted">Generating detailed BPHS analysis...</p>
+                      <p className="text-cosmic-text-muted text-sm mt-2">This may take a moment</p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -479,32 +485,87 @@ const DataRow = ({ label, value, icon }) => (
 );
 
 const PredictionRenderer = ({ content }) => {
-  // Simple markdown-like rendering
-  const lines = content.split('\n');
+  // Use dynamic import for react-markdown
+  const [ReactMarkdown, setReactMarkdown] = useState(null);
+  const [remarkGfm, setRemarkGfm] = useState(null);
+  
+  useEffect(() => {
+    // Dynamically import markdown libraries
+    Promise.all([
+      import('react-markdown'),
+      import('remark-gfm')
+    ]).then(([md, gfm]) => {
+      setReactMarkdown(() => md.default);
+      setRemarkGfm(() => gfm.default);
+    });
+  }, []);
+  
+  if (!ReactMarkdown || !remarkGfm) {
+    // Fallback to simple rendering while loading
+    return (
+      <div className="space-y-4">
+        {content.split('\n').map((line, idx) => {
+          if (line.startsWith('## ')) {
+            return <h2 key={idx} className="font-cinzel text-cosmic-brand-accent text-lg mt-6 border-b border-cosmic-brand-accent/30 pb-2">{line.replace('## ', '')}</h2>;
+          }
+          if (line.startsWith('### ')) {
+            return <h3 key={idx} className="font-cinzel text-cosmic-brand-accent mt-4">{line.replace('### ', '')}</h3>;
+          }
+          if (line.startsWith('|')) {
+            return <code key={idx} className="block text-xs text-cosmic-text-secondary font-mono">{line}</code>;
+          }
+          if (line.trim() === '') return <br key={idx} />;
+          return <p key={idx} className="text-cosmic-text-secondary leading-relaxed">{line}</p>;
+        })}
+      </div>
+    );
+  }
   
   return (
-    <div className="space-y-4">
-      {lines.map((line, idx) => {
-        if (line.startsWith('### ')) {
-          return <h3 key={idx} className="font-cinzel text-cosmic-brand-accent mt-6">{line.replace('### ', '')}</h3>;
-        }
-        if (line.startsWith('## ')) {
-          return <h2 key={idx} className="font-cinzel text-cosmic-brand-accent text-lg mt-6">{line.replace('## ', '')}</h2>;
-        }
-        if (line.startsWith('# ')) {
-          return <h1 key={idx} className="font-cinzel text-cosmic-brand-accent text-xl mt-6">{line.replace('# ', '')}</h1>;
-        }
-        if (line.startsWith('- ') || line.startsWith('* ')) {
-          return <li key={idx} className="text-cosmic-text-secondary ml-4">{line.replace(/^[-*] /, '')}</li>;
-        }
-        if (line.startsWith('**') && line.endsWith('**')) {
-          return <p key={idx} className="text-cosmic-brand-accent font-semibold">{line.replace(/\*\*/g, '')}</p>;
-        }
-        if (line.trim() === '') {
-          return <br key={idx} />;
-        }
-        return <p key={idx} className="text-cosmic-text-secondary leading-relaxed">{line}</p>;
-      })}
+    <div className="markdown-content">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          h1: ({children}) => <h1 className="font-cinzel text-cosmic-brand-accent text-2xl mt-8 mb-4 border-b border-cosmic-brand-accent/30 pb-2">{children}</h1>,
+          h2: ({children}) => <h2 className="font-cinzel text-cosmic-brand-accent text-xl mt-8 mb-4 border-b border-cosmic-brand-accent/30 pb-2">{children}</h2>,
+          h3: ({children}) => <h3 className="font-cinzel text-cosmic-brand-accent text-lg mt-6 mb-3">{children}</h3>,
+          h4: ({children}) => <h4 className="font-cinzel text-cosmic-text-primary text-base mt-4 mb-2">{children}</h4>,
+          p: ({children}) => <p className="text-cosmic-text-secondary leading-relaxed mb-4">{children}</p>,
+          ul: ({children}) => <ul className="list-disc list-inside space-y-1 mb-4 text-cosmic-text-secondary">{children}</ul>,
+          ol: ({children}) => <ol className="list-decimal list-inside space-y-1 mb-4 text-cosmic-text-secondary">{children}</ol>,
+          li: ({children}) => <li className="text-cosmic-text-secondary ml-2">{children}</li>,
+          strong: ({children}) => <strong className="text-cosmic-brand-accent font-semibold">{children}</strong>,
+          em: ({children}) => <em className="text-cosmic-text-primary italic">{children}</em>,
+          table: ({children}) => (
+            <div className="overflow-x-auto my-4">
+              <table className="w-full border-collapse border border-cosmic-brand-accent/30 text-sm">
+                {children}
+              </table>
+            </div>
+          ),
+          thead: ({children}) => <thead className="bg-cosmic-brand-secondary/30">{children}</thead>,
+          tbody: ({children}) => <tbody>{children}</tbody>,
+          tr: ({children}) => <tr className="border-b border-cosmic-brand-accent/20">{children}</tr>,
+          th: ({children}) => <th className="px-3 py-2 text-left text-cosmic-brand-accent font-cinzel text-xs uppercase">{children}</th>,
+          td: ({children}) => <td className="px-3 py-2 text-cosmic-text-secondary">{children}</td>,
+          blockquote: ({children}) => (
+            <blockquote className="border-l-4 border-cosmic-brand-accent pl-4 italic text-cosmic-text-muted my-4">
+              {children}
+            </blockquote>
+          ),
+          code: ({children, inline}) => 
+            inline ? (
+              <code className="bg-cosmic-bg-secondary px-1 py-0.5 rounded text-cosmic-text-primary text-sm">{children}</code>
+            ) : (
+              <pre className="bg-cosmic-bg-secondary p-4 rounded-lg overflow-x-auto my-4">
+                <code className="text-cosmic-text-secondary text-sm">{children}</code>
+              </pre>
+            ),
+          hr: () => <hr className="my-6 border-cosmic-brand-accent/30" />,
+        }}
+      >
+        {content}
+      </ReactMarkdown>
     </div>
   );
 };
